@@ -425,18 +425,19 @@
                     },
                     body: JSON.stringify({
                         tasks: {
-                            'upload-my-file': {
+                            'upload-task': {
                                 operation: 'import/upload'
                             },
-                            'convert-my-file': {
+                            'convert-task': {
                                 operation: 'convert',
-                                input: 'upload-my-file',
+                                input: ['upload-task'],
                                 output_format: currentFormat,
-                                some_other_task: false
+                                audio_codec: currentFormat === 'mp3' ? 'mp3' : undefined,
+                                audio_bitrate: 192
                             },
-                            'export-my-file': {
+                            'export-task': {
                                 operation: 'export/url',
-                                input: 'convert-my-file'
+                                input: ['convert-task']
                             }
                         }
                     })
@@ -448,7 +449,7 @@
                 }
                 
                 const jobData = await createResponse.json();
-                const uploadTask = jobData.data.tasks.find(t => t.name === 'upload-my-file');
+                const uploadTask = jobData.data.tasks.find(t => t.name === 'upload-task');
                 
                 // Step 2: Upload file
                 progressFill.style.width = '30%';
@@ -476,7 +477,7 @@
                 progressFill.style.width = '90%';
                 convertText.innerHTML = '<span class="spinner"></span><span>Preparing download...</span>';
                 
-                const exportTask = jobStatus.tasks.find(t => t.name === 'export-my-file');
+                const exportTask = jobStatus.tasks.find(t => t.name === 'export-task');
                 const downloadUrl = exportTask.result.files[0].url;
                 
                 progressFill.style.width = '100%';
@@ -503,7 +504,8 @@
                 
             } catch (error) {
                 console.error('Conversion error:', error);
-                alert('Error: ' + error.message);
+                console.error('Error details:', error.stack);
+                alert('Error: ' + error.message + '\n\nPlease check the browser console for details.');
                 convertBtn.disabled = false;
                 convertText.textContent = `Convert to ${currentFormat.toUpperCase()}`;
                 progressBar.classList.add('hidden');
