@@ -80,9 +80,8 @@
             margin-bottom: 1.5rem;
         }
         
-        .btn-upload:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(147, 51, 234, 0.3);
+        .btn-upload:active {
+            transform: scale(0.98);
         }
         
         .btn-convert {
@@ -91,9 +90,8 @@
             margin-bottom: 1rem;
         }
         
-        .btn-convert:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(22, 163, 74, 0.3);
+        .btn-convert:active:not(:disabled) {
+            transform: scale(0.98);
         }
         
         .btn-convert:disabled {
@@ -107,9 +105,8 @@
             color: white;
         }
         
-        .btn-download:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);
+        .btn-download:active {
+            transform: scale(0.98);
         }
         
         .file-info {
@@ -164,8 +161,8 @@
             color: #d1d5db;
         }
         
-        .format-btn:hover {
-            background: #374151;
+        .format-btn:active {
+            transform: scale(0.95);
         }
         
         .format-btn.active {
@@ -197,7 +194,7 @@
         }
         
         .hidden {
-            display: none;
+            display: none !important;
         }
         
         .spinner {
@@ -210,6 +207,17 @@
             animation: spin 0.8s linear infinite;
         }
         
+        .info-box {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            color: #93c5fd;
+            line-height: 1.5;
+        }
+        
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
@@ -219,10 +227,14 @@
     <div class="container">
         <div class="header">
             <h1 class="title">Video Converter</h1>
-            <p class="subtitle">Convert your videos to audio format</p>
+            <p class="subtitle">Extract audio from your videos</p>
         </div>
         
         <div class="card">
+            <div class="info-box">
+                💡 <strong>Note:</strong> The converted file will be in WebM audio format, which works on most devices. You can rename it to .mp3 after download if needed.
+            </div>
+            
             <input type="file" id="fileInput" accept="video/*" class="hidden">
             
             <button class="btn btn-upload" id="uploadBtn">
@@ -236,19 +248,8 @@
                 <p class="file-size" id="fileSize"></p>
             </div>
             
-            <div>
-                <label class="format-label">Choose Output Format</label>
-                <div class="format-grid">
-                    <button class="format-btn active" data-format="mp3">MP3 Audio</button>
-                    <button class="format-btn" data-format="wav">WAV Audio</button>
-                    <button class="format-btn" data-format="aac">AAC Audio</button>
-                    <button class="format-btn" data-format="m4a">M4A Audio</button>
-                    <button class="format-btn" data-format="ogg">OGG Audio</button>
-                </div>
-            </div>
-            
             <button class="btn btn-convert" id="convertBtn" disabled>
-                <span id="convertText">Convert</span>
+                <span id="convertText">Extract Audio</span>
             </button>
             
             <div id="progressBar" class="progress-bar hidden">
@@ -257,7 +258,7 @@
             
             <button class="btn btn-download hidden" id="downloadBtn">
                 <span>⬇️</span>
-                <span id="downloadText">Download MP3</span>
+                <span>Download Audio File</span>
             </button>
         </div>
         
@@ -267,7 +268,6 @@
     <script>
         let selectedFile = null;
         let convertedBlob = null;
-        let currentFormat = 'mp3';
         
         const fileInput = document.getElementById('fileInput');
         const uploadBtn = document.getElementById('uploadBtn');
@@ -275,13 +275,11 @@
         const fileInfo = document.getElementById('fileInfo');
         const fileName = document.getElementById('fileName');
         const fileSize = document.getElementById('fileSize');
-        const formatBtns = document.querySelectorAll('.format-btn');
         const convertBtn = document.getElementById('convertBtn');
         const convertText = document.getElementById('convertText');
         const progressBar = document.getElementById('progressBar');
         const progressFill = document.getElementById('progressFill');
         const downloadBtn = document.getElementById('downloadBtn');
-        const downloadText = document.getElementById('downloadText');
         
         uploadBtn.addEventListener('click', () => fileInput.click());
         
@@ -303,74 +301,96 @@
             }
         });
         
-        formatBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                formatBtns.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentFormat = btn.dataset.format;
-                downloadText.textContent = `Download ${currentFormat.toUpperCase()}`;
-            });
-        });
-        
         convertBtn.addEventListener('click', async () => {
             if (!selectedFile) return;
             
             convertBtn.disabled = true;
             progressBar.classList.remove('hidden');
-            convertText.innerHTML = '<span class="spinner"></span><span>Converting...</span>';
+            progressFill.style.width = '10%';
+            convertText.innerHTML = '<span class="spinner"></span><span>Loading video...</span>';
             
             try {
                 const video = document.createElement('video');
+                video.muted = true;
+                video.playsInline = true;
                 const videoURL = URL.createObjectURL(selectedFile);
                 video.src = videoURL;
                 
-                await new Promise(resolve => {
-                    video.onloadedmetadata = resolve;
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = () => {
+                        console.log('Video loaded:', video.duration, 'seconds');
+                        resolve();
+                    };
+                    video.onerror = () => reject(new Error('Failed to load video'));
+                    setTimeout(() => reject(new Error('Video load timeout')), 10000);
                 });
                 
-                let progress = 0;
-                const progressInterval = setInterval(() => {
-                    if (progress < 90) {
-                        progress += 10;
-                        progressFill.style.width = progress + '%';
-                        convertText.innerHTML = `<span class="spinner"></span><span>Converting... ${progress}%</span>`;
-                    }
-                }, 200);
+                progressFill.style.width = '30%';
+                convertText.innerHTML = '<span class="spinner"></span><span>Starting extraction...</span>';
                 
-                const stream = video.captureStream ? video.captureStream() : video.mozCaptureStream();
-                const audioStream = new MediaStream(stream.getAudioTracks());
+                await video.play();
                 
-                const mediaRecorder = new MediaRecorder(audioStream, {
-                    mimeType: 'audio/webm;codecs=opus'
-                });
+                progressFill.style.width = '50%';
+                convertText.innerHTML = '<span class="spinner"></span><span>Recording audio...</span>';
                 
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaElementSource(video);
+                const dest = audioContext.createMediaStreamDestination();
+                source.connect(dest);
+                source.connect(audioContext.destination);
+                
+                const mediaRecorder = new MediaRecorder(dest.stream);
                 const chunks = [];
-                mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+                
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        chunks.push(e.data);
+                        console.log('Chunk recorded:', e.data.size, 'bytes');
+                    }
+                };
                 
                 mediaRecorder.onstop = () => {
+                    console.log('Recording stopped. Total chunks:', chunks.length);
+                    if (chunks.length === 0) {
+                        throw new Error('No audio data recorded');
+                    }
                     convertedBlob = new Blob(chunks, { type: 'audio/webm' });
-                    clearInterval(progressInterval);
                     progressFill.style.width = '100%';
-                    convertText.textContent = 'Convert';
+                    convertText.textContent = 'Extract Audio';
                     convertBtn.disabled = false;
                     downloadBtn.classList.remove('hidden');
                     URL.revokeObjectURL(videoURL);
+                    video.remove();
                 };
                 
-                mediaRecorder.start();
-                video.play();
+                mediaRecorder.onerror = (e) => {
+                    console.error('MediaRecorder error:', e);
+                    throw new Error('Recording failed');
+                };
                 
-                setTimeout(() => {
-                    mediaRecorder.stop();
-                    video.pause();
-                }, video.duration * 1000);
+                mediaRecorder.start(100);
+                
+                progressFill.style.width = '70%';
+                
+                const duration = Math.min(video.duration * 1000, 300000);
+                console.log('Recording for', duration, 'ms');
+                
+                await new Promise(resolve => setTimeout(resolve, duration));
+                
+                progressFill.style.width = '90%';
+                convertText.innerHTML = '<span class="spinner"></span><span>Finalizing...</span>';
+                
+                mediaRecorder.stop();
+                video.pause();
+                audioContext.close();
                 
             } catch (error) {
                 console.error('Conversion error:', error);
-                alert('Error converting file. Please try again.');
+                alert('Error: ' + error.message + '\n\nTry a shorter video or different format.');
                 convertBtn.disabled = false;
-                convertText.textContent = 'Convert';
+                convertText.textContent = 'Extract Audio';
                 progressBar.classList.add('hidden');
+                progressFill.style.width = '0%';
             }
         });
         
@@ -380,7 +400,7 @@
             const url = URL.createObjectURL(convertedBlob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${selectedFile.name.split('.')[0]}.${currentFormat}`;
+            a.download = `${selectedFile.name.split('.')[0]}_audio.webm`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
