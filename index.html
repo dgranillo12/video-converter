@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>Video Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
+    <div id="app"></div>
+
+    <script>
+        const { useState, useRef, createElement: e } = React;
+
+        function VideoConverter() {
+            const [file, setFile] = useState(null);
+            const [format, setFormat] = useState('mp3');
+            const [converting, setConverting] = useState(false);
+            const [convertedFile, setConvertedFile] = useState(null);
+            const [progress, setProgress] = useState(0);
+            const fileInputRef = useRef(null);
+
+            const formats = [
+                { value: 'mp3', label: 'MP3 Audio' },
+                { value: 'wav', label: 'WAV Audio' },
+                { value: 'aac', label: 'AAC Audio' },
+                { value: 'm4a', label: 'M4A Audio' },
+                { value: 'ogg', label: 'OGG Audio' }
+            ];
+
+            const handleFileSelect = (event) => {
+                const selectedFile = event.target.files[0];
+                if (selectedFile && selectedFile.type.startsWith('video/')) {
+                    setFile(selectedFile);
+                    setConvertedFile(null);
+                    setProgress(0);
+                } else {
+                    alert('Please select a valid video file');
+                }
+            };
+
+            const handleConvert = async () => {
+                if (!file) return;
+
+                setConverting(true);
+                setProgress(0);
+
+                try {
+                    const video = document.createElement('video');
+                    const videoURL = URL.createObjectURL(file);
+                    video.src = videoURL;
+
+                    await new Promise((resolve) => {
+                        video.onloadedmetadata = resolve;
+                    });
+
+                    const progressInterval = setInterval(() => {
+                        setProgress(prev => {
+                            if (prev >= 90) {
+                                clearInterval(progressInterval);
+                                return 90;
+                            }
+                            return prev + 10;
+                        });
+                    }, 200);
+
+                    const stream = video.captureStream ? video.captureStream() : video.mozCaptureStream();
+                    const audioStream = new MediaStream(stream.getAudioTracks());
+                    
+                    const mediaRecorder = new MediaRecorder(audioStream, {
+                        mimeType: 'audio/webm;codecs=opus'
+                    });
+
+                    const chunks = [];
+                    mediaRecorder.ondataavailable = (event) => chunks.push(event.data);
+                    
+                    mediaRecorder.onstop = async () => {
+                        const blob = new Blob(chunks, { type: 'audio/webm' });
+                        setConvertedFile(blob);
+                        setProgress(100);
+                        setConverting(false);
+                        clearInterval(progressInterval);
+                        URL.revokeObjectURL(videoURL);
+                    };
+
+                    mediaRecorder.start();
+                    video.play();
+
+                    setTimeout(() => {
+                        mediaRecorder.stop();
+                        video.pause();
+                    }, video.duration * 1000);
+
+                } catch (error) {
+                    console.error('Conversion error:', error);
+                    alert('Error converting file. Please try again.');
+                    setConverting(false);
+                    setProgress(0);
+                }
+            };
+
+            const handleDownload = () => {
+                if (!convertedFile) return;
+
+                const url = URL.createObjectURL(convertedFile);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${file.name.split('.')[0]}.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            const handleUploadClick = () => {
+                fileInputRef.current?.click();
+            };
+
+            return e('div', { className: 'min-h-screen flex items-center justify-center p-4' },
+                e('div', { className: 'w-full max-w-md' },
+                    e('div', { className: 'text-center mb-8' },
+                        e('h1', { className: 'text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent' }, 'Video Converter'),
+                        e('p', { className: 'text-gray-400' }, 'Convert your videos to audio format')
+                    ),
+                    e('div', { className: 'bg-gray-800/50 backdrop-blur-lg rounded-2xl shadow-2xl p-8 border border-gray-700' },
+                        e('input', {
+                            ref: fileInputRef,
+                            type: 'file',
+                            accept: 'video/*',
+                            onChange: handleFileSelect,
+                            className: 'hidden'
+                        }),
+                        e('button', {
+                            onClick: handleUploadClick,
+                            className: 'w-full mb-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-3 shadow-lg hover:shadow-purple-500/50'
+                        }, 
+                            e('span', null, '📤'),
+                            file ? 'Change Video' : 'Upload Video'
+                        ),
+                        file && e('div', { className: 'mb-6 p-4 bg-gray-900/50 rounded-lg border border-gray-700' },
+                            e('p', { className: 'text-sm text-gray-400 mb-1' }, 'Selected file:'),
+                            e('p', { className: 'text-white font-medium truncate' }, file.name),
+                            e('p', { className: 'text-xs text-gray-500 mt-1' }, `${(file.size / (1024 * 1024)).toFixed(2)} MB`)
+                        ),
+                        e('div', { className: 'mb-6' },
+                            e('label', { className: 'block text-sm font-medium text-gray-300 mb-3' }, 'Choose Output Format'),
+                            e('div', { className: 'grid grid-cols-2 gap-2' },
+                                formats.map(fmt =>
+                                    e('button', {
+                                        key: fmt.value,
+                                        onClick: () => setFormat(fmt.value),
+                                        className: `py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
+                                            format === fmt.value
+                                                ? 'bg-purple-600 text-white shadow-lg'
+                                                : 'bg-gray-700/50 text-gray-300 hover:bg-gray-700'
+                                        }`
+                                    }, fmt.label)
+                                )
+                            )
+                        ),
+                        e('button', {
+                            onClick: handleConvert,
+                            disabled: !file || converting,
+                            className: `w-full py-4 px-6 rounded-xl font-semibold transition-all duration-200 mb-4 ${
+                                !file || converting
+                                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                    : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-green-500/50'
+                            }`
+                        }, converting ? `Converting... ${progress}%` : 'Convert'),
+                        converting && e('div', { className: 'mb-4 bg-gray-900/50 rounded-full h-2 overflow-hidden' },
+                            e('div', {
+                                className: 'bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-300',
+                                style: { width: `${progress}%` }
+                            })
+                        ),
+                        convertedFile && e('button', {
+                            onClick: handleDownload,
+                            className: 'w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-500/50'
+                        },
+                            e('span', null, '⬇️'),
+                            `Download ${format.toUpperCase()}`
+                        )
+                    ),
+                    e('p', { className: 'text-center text-gray-500 text-sm mt-6' }, 'Works on iPhone, iPad, Windows, Mac & Android')
+                )
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('app'));
+        root.render(React.createElement(VideoConverter));
+    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+</body>
+</html>
